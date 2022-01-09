@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"reflect"
 
 	"github.com/olivere/elastic/v7"
 )
@@ -102,4 +104,39 @@ func main() {
 		log.Fatalln(err)
 	}
 	fmt.Printf("Got document %s in version %d from index %s, type %s\n", get.Id, get.Version, get.Index, get.Type)
+
+	// Refresh before search
+	_, err = client.Refresh().Index(indexName).Do(context.Background())
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	res, err := client.Search().
+		Index(indexName).
+		Pretty(true).
+		Do(context.Background())
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Printf("Query took %d milliseconds\n", res.TookInMillis)
+	fmt.Printf("Found a total of %d tweets\n", res.TotalHits())
+
+	var ttyp Tweet
+	for _, item := range res.Each(reflect.TypeOf(ttyp)) {
+		t := item.(Tweet)
+		fmt.Printf("Tweet by %s: %s\n", t.User, t.Message)
+	}
+
+	if res.TotalHits() > 0 {
+		for _, hit := range res.Hits.Hits {
+			var t Tweet
+			err := json.Unmarshal(hit.Source, &t)
+			if err != nil {
+				log.Println(err)
+			}
+			fmt.Printf("Tweet by %s: %s\n", t.User, t.Message)
+		}
+	} else {
+		fmt.Print("Found no tweets\n")
+	}
 }
