@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	url     = "http://127.0.0.1:9200"
-	index   = "twitter"
-	mapping = `
+	url       = "http://127.0.0.1:9200"
+	indexName = "twitter"
+	mapping   = `
 {
 	"settings":{
 		"number_of_shards":1,
@@ -47,6 +47,12 @@ const (
 `
 )
 
+type Tweet struct {
+	User     string
+	Message  string
+	Retweets int
+}
+
 func main() {
 	client, err := elastic.NewClient(elastic.SetURL(url))
 	if err != nil {
@@ -59,13 +65,13 @@ func main() {
 	}
 	fmt.Printf("Elasticsearch returned with code %d and version %s\n", code, info.Version.Number)
 
-	exists, err := client.IndexExists(index).Do(context.Background())
+	exists, err := client.IndexExists(indexName).Do(context.Background())
 	if err != nil {
 		log.Fatalln(err)
 	}
 	if !exists {
 		fmt.Println("Create a new Index.")
-		res, err := client.CreateIndex(index).Body(mapping).IncludeTypeName(true).Do(context.Background())
+		res, err := client.CreateIndex(indexName).Body(mapping).IncludeTypeName(true).Do(context.Background())
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -75,4 +81,25 @@ func main() {
 	} else {
 		fmt.Println("Exist")
 	}
+
+	id := "1"
+	t := Tweet{User: "olivere", Message: "Take Five", Retweets: 0}
+	put, err := client.Index().
+		Index(indexName).
+		Id(id).
+		BodyJson(t).
+		Do(context.Background())
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Printf("Indexed tweet %s to index %s, type %s\n", put.Id, put.Index, put.Type)
+
+	get, err := client.Get().
+		Index(indexName).
+		Id(id).
+		Do(context.Background())
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Printf("Got document %s in version %d from index %s, type %s\n", get.Id, get.Version, get.Index, get.Type)
 }
